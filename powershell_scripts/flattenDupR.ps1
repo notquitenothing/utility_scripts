@@ -9,10 +9,19 @@ Param (
 
     [Parameter(
       Mandatory = $false,
+      HelpMessage = "Will flatten parent-child folders even if they don't have the same name, if the parents path contains the childs folder name")]
+    [Alias("agro")]
+    [Switch]
+    $Agressive,
+
+    [Parameter(
+      Mandatory = $false,
       HelpMessage = "Prints what would happen if run")]
     [Switch]
     $WhatIf
 )
+
+$ErrorActionPreference = "Stop"
 
 if (-not (Test-Path -LiteralPath "$($inputPath)")) {
   Write-Host "$($inputPath)"
@@ -32,18 +41,20 @@ function checkChildren($parentFolder) {
   $childFolders = Get-ChildItem -Directory -LiteralPath "$($parentFolder.FullName)\"
   $childItems = Get-ChildItem -LiteralPath "$($parentFolder.FullName)\"
 
+  $onlyChildIsFolder = $childItems.count -eq 1 -and $childFolders.count -eq 1
+  $childFolder = if ($childFolders.count -eq 1) { $childFolders[0] }
+  $parentNameIsChildName = if ($childFolder) { "$(Split-Path $parentFolder.FullName -Leaf)" -eq "$(Split-Path $childFolders[0].FullName -Leaf)" }
+  $parentNameContainsChildName = if ($childFolder) { "$(Split-Path $parentFolder.FullName)".toLower().Contains("$(Split-Path $childFolders[0].FullName -Leaf)") }
+
   # If there is only one child and its name is the same as the parent, flatten
-  if ($childItems.count -eq 1 -and $childFolders.count -eq 1 -and $(Split-Path $childFolders[0].FullName -Leaf) -eq $(Split-Path $parentFolder.FullName -Leaf)) {
-    $childFolder = $childFolders[0]
+  if ($onlyChildIsFolder -and (($Agressive -and $parentNameContainsChildName) -or $parentNameIsChildName)) {
+    
     checkChildren $childFolder
     Write-Host "$($childFolder.FullName)"
     if (-not $WhatIf) {
       Get-ChildItem -LiteralPath "$($childFolder.FullName)" | Move-Item -Destination "$($parentFolder.FullName)"
       if ("$($childFolder.FullName)".Split("\").Count -le $inputPathDepth) {
         throw "Something went wrong, we were about to delete $($childFolder.FullName)!"
-      }
-      if ($Error.Count) {
-        throw "There was some kind of error, lets not continue."
       }
       Remove-Item -Force -LiteralPath "$($childFolder.FullName)"
     }
@@ -55,8 +66,6 @@ function checkChildren($parentFolder) {
   
   return
 }
-
-$Error.Clear()
 
 checkChildren $parentFolder
 
