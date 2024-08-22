@@ -38,14 +38,14 @@ if (!($parentFolder.PSIsContainer)) {
 
 function checkChildren($parentFolder) {
   # Get all direct children of input path
-  $childFolders = Get-ChildItem -Directory -LiteralPath "$($parentFolder.FullName)\"
-  $childItems = Get-ChildItem -LiteralPath "$($parentFolder.FullName)\"
+  $childFolders = Get-ChildItem -Force -Directory -LiteralPath "$($parentFolder.FullName)\"
+  $childItems = Get-ChildItem -Force -LiteralPath "$($parentFolder.FullName)\"
 
   $onlyChildIsFolder = $childItems.count -eq 1 -and $childFolders.count -eq 1
   $childFolder = if ($childFolders.count -eq 1) { $childFolders[0] }
   $parentNameIsChildName = if ($childFolder) { "$(Split-Path $parentFolder.FullName -Leaf)" -eq "$(Split-Path $childFolders[0].FullName -Leaf)" }
   $parentNameContainsChildName = if ($childFolder) { "$($parentFolder.FullName)".toLower().Contains("$(Split-Path $childFolders[0].FullName -Leaf)") }
-  $childIsEmpty = if ($childFolder) { $(Get-ChildItem -LiteralPath "$($childFolder.FullName)\").Count -eq 0 }
+  $parentIsEmpty = $childItems.Count -eq 0
 
   
   if ($onlyChildIsFolder -and (($Agressive -and $parentNameContainsChildName) -or $parentNameIsChildName)) {
@@ -53,20 +53,20 @@ function checkChildren($parentFolder) {
     checkChildren $childFolder
     Write-Host "$($childFolder.FullName)"
     if (-not $WhatIf) {
-      Get-ChildItem -LiteralPath "$($childFolder.FullName)" | Move-Item -Destination "$($parentFolder.FullName)"
+      Get-ChildItem -Force -LiteralPath "$($childFolder.FullName)" | Move-Item -Destination "$($parentFolder.FullName)"
       if ("$($childFolder.FullName)".Split("\").Count -le $inputPathDepth) {
         throw "Something went wrong, we were about to delete $($childFolder.FullName)!"
       }
       Remove-Item -LiteralPath "$($childFolder.FullName)"
     }
-  } elseif ($childIsEmpty) {
+  } elseif ($parentIsEmpty) {
     # If the child folder is empty, delete it
-    Write-Host "$($childFolder.FullName)"
+    Write-Host "$($parentFolder.FullName)"
     if (-not $WhatIf) {
-      if ("$($childFolder.FullName)".Split("\").Count -le $inputPathDepth) {
-        throw "Something went wrong, we were about to delete $($childFolder.FullName)!"
+      if ("$($parentFolder.FullName)".Split("\").Count -le $inputPathDepth) {
+        throw "Something went wrong, we were about to delete $($parentFolder.FullName)!"
       }
-      Remove-Item -LiteralPath "$($childFolder.FullName)"
+      Remove-Item -LiteralPath "$($parentFolder.FullName)"
     }
   } else {
     # recursion
